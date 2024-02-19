@@ -31,6 +31,7 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 import ru.hh.kafkahw.internal.Service;
+import ru.hh.kafkahw.producer.Sender;
 
 @RunWith(SpringRunner.class)
 @Import(KafkaTest.KafkaTestConfiguration.class)
