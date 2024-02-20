@@ -63,7 +63,7 @@ public class TopicListener {
     String data =  consumerRecord.value();
     LOGGER.info("Try handle message, topic {}, payload {}", topic, data);
     Message msg = getMessage(data);
-    if(wroteId.isNew(msg.getUuid())){
+    if(wroteId.isNew(msg.getUuid()) && (service.count(topic, msg.getContent()) < 1)){
       try {
         service.handle(topic, msg.getContent());
       } catch (Exception e){
