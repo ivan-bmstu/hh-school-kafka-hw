@@ -26,11 +26,14 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 import ru.hh.kafkahw.internal.Service;
+import ru.hh.kafkahw.messages.Message;
 import ru.hh.kafkahw.producer.Sender;
 
 @RunWith(SpringRunner.class)
@@ -102,7 +105,8 @@ class KafkaTest {
 
     @Bean
     public ConsumerFactory<Integer, String> consumerFactory(KafkaContainer kafka) {
-      return new DefaultKafkaConsumerFactory<>(consumerConfigs(kafka));
+      DefaultKafkaConsumerFactory<Integer, String> cf = new DefaultKafkaConsumerFactory<>(consumerConfigs(kafka));
+      return cf;
     }
 
     @Bean
@@ -124,7 +128,9 @@ class KafkaTest {
       configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
       configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
       configProps.put(ProducerConfig.LINGER_MS_CONFIG, 0);
-      return new DefaultKafkaProducerFactory<>(configProps);
+      DefaultKafkaProducerFactory<String, String> objectObjectDefaultKafkaProducerFactory =
+              new DefaultKafkaProducerFactory<>(configProps);
+      return objectObjectDefaultKafkaProducerFactory;
     }
 
     @Bean

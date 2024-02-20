@@ -1,46 +1,86 @@
 package ru.hh.kafkahw.consumer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import ru.hh.kafkahw.internal.Service;
+import ru.hh.kafkahw.messages.Message;
+
 
 @Component
 public class TopicListener {
   private final static Logger LOGGER = LoggerFactory.getLogger(TopicListener.class);
   private final Service service;
+  private final ObjectMapper deserializer;
+  private final SetUUIDMessages wroteId;
 
-  @Autowired
   public TopicListener(Service service) {
     this.service = service;
+    this.deserializer = new ObjectMapper();
+    this.wroteId = new SetUUIDMessages();
   }
 
-  //не пытаемся считать повторно сообщения в случае неудачи
-  @KafkaListener(topics = "topic1", groupId = "group1", errorHandler = "mostOnceSemantic")
+  @KafkaListener(topics = "topic1", groupId = "group1")
   public void atMostOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
-    listen(consumerRecord, ack);
+    ack.acknowledge();
+    String topic = consumerRecord.topic();
+    String data =  consumerRecord.value();
+    LOGGER.info("Try handle message, topic {}, payload {}", topic, data);
+    Message msg = getMessage(data);
+    if(wroteId.isNew(msg.getUuid())){
+      wroteId.writeId(msg.getUuid());
+      try {
+        service.handle(topic, msg.getContent());
+      } catch (Exception e){
+        LOGGER.error("FAILED AT MESSAGE '{}' ERROR OCCUR AT TOPIC: {}", consumerRecord.value(), consumerRecord.topic());
+      }
+    }
   }
 
-  //пытаемся считать повторно сообщения в случае неудачи
-  @KafkaListener(topics = "topic2", groupId = "group2", errorHandler = "retry")
+  @KafkaListener(topics = "topic2", groupId = "group2")
   public void atLeastOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
-    listen(consumerRecord, ack);
-  }
-
-  //пытаемся считать повторно сообщения в случае неудачи и/или фильтруем сообщение
-  @KafkaListener(topics = "topic3", groupId = "group3", errorHandler = "retry", filter = "messageFilterDiscard")
-  public void exactlyOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
-    listen(consumerRecord, ack);
-  }
-
-  //логгируем --> пытаемся получить И обработать -->  отправляем ответ для Kafka
-  private void listen(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack){
-    LOGGER.info("Try handle message, topic {}, payload {}", consumerRecord.topic(), consumerRecord.value());
-    service.handle(consumerRecord.topic(), consumerRecord.value());
+    String topic = consumerRecord.topic();
+    String data =  consumerRecord.value();
+    LOGGER.info("Try handle message, topic {}, payload {}", topic, data);
+    Message msg = getMessage(data);
+    try {
+      service.handle(topic, msg.getContent());
+    } catch (Exception e){
+      LOGGER.error("FAILED AT MESSAGE '{}' ERROR OCCUR AT TOPIC: {}", consumerRecord.value(), consumerRecord.topic());
+      throw  new RuntimeException();
+    }
     ack.acknowledge();
   }
+
+  @KafkaListener(topics = "topic3", groupId = "group3")
+  public void exactlyOnce(ConsumerRecord<?, String> consumerRecord, Acknowledgment ack) {
+    String topic = consumerRecord.topic();
+    String data =  consumerRecord.value();
+    LOGGER.info("Try handle message, topic {}, payload {}", topic, data);
+    Message msg = getMessage(data);
+    if(wroteId.isNew(msg.getUuid())){
+      try {
+        service.handle(topic, msg.getContent());
+      } catch (Exception e){
+        LOGGER.error("FAILED AT MESSAGE '{}' ERROR OCCUR AT TOPIC: {}", consumerRecord.value(), consumerRecord.topic());
+        throw  new RuntimeException();
+      }
+    }
+    wroteId.writeId(msg.getUuid());
+    ack.acknowledge();
+  }
+
+   Message getMessage(String json){
+     try {
+       return deserializer.readValue(json, Message.class);
+     } catch (JsonProcessingException e) {
+       throw new RuntimeException(e);
+     }
+   }
+
 }

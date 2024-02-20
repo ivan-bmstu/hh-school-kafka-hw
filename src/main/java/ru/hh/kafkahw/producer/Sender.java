@@ -1,36 +1,42 @@
 package ru.hh.kafkahw.producer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.hh.kafkahw.internal.KafkaProducer;
+import ru.hh.kafkahw.messages.Message;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 @Component
 public class Sender {
   private final KafkaProducer producer;
-  private final Set<String> importantTopics;
+  private final ObjectMapper serializer;
 
   @Autowired
   public Sender(KafkaProducer producer) {
     this.producer = producer;
-    importantTopics = new HashSet<>();
-    importantTopics.add("topic2");
-    importantTopics.add("topic3");
+    serializer = new ObjectMapper();
   }
 
   public void doSomething(String topic, String message)  {
+    Message msg = new Message(message, UUID.randomUUID());
+    String serializedMsg;
     try {
-      producer.send(topic, message);
-    } catch (Exception e) {
-      if (isNeedRetry(topic)){
-        doSomething(topic, message);
-      }
+      serializedMsg = serializer.writeValueAsString(msg);
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
     }
+    send(topic, msg.getUuid().toString(), serializedMsg);
   }
 
-  private boolean isNeedRetry(String topicName){
-    return importantTopics.contains(topicName);
+  private void send(String topic, String key, String message){
+    try {
+      producer.send(topic, key, message);
+    } catch (Exception e){
+      send(topic, key, message);
+    }
   }
 }
